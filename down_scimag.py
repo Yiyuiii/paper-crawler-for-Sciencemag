@@ -3,14 +3,19 @@
 
 from __future__ import print_function
 
-import numpy as np
 import requests
 import os
+import math
 
+#global constrant
 target="http://science.sciencemag.org/content/sci/%s/%s/"
 tar_content="http://science.sciencemag.org/content/%s/%s"
 tar_prefix="http://science.sciencemag.org"
+first_year=1880
+issue_per_vol=13
+issue_1stinvol_known=(6415,362)
 
+#function
 def get_filename_webpath(text):
     index=text.rindex('/')+1
     return text[index:len(text)]
@@ -25,7 +30,7 @@ def get_vol_issue(text):
     issue=text[issue_index:issue_index+4]
     return (int(vol),int(issue))
     
-def cur_vol_issue():
+def get_vol_issue_cur():
     source_url_pre="http://science.sciencemag.org/content/current"
     source_url=requests.get(source_url_pre).url
     return get_vol_issue(source_url)
@@ -38,7 +43,7 @@ def get_text(vol,issue):
     else:
         return "Failed"
 
-def cur_text():
+def get_text_cur():
     source_url_pre="http://science.sciencemag.org/content/current"
     source=requests.get(source_url_pre)
     if(source.status_code == requests.codes.ok):
@@ -46,7 +51,7 @@ def cur_text():
     else:
         return "Failed"
 
-def init_vol_issue(vol,issue,local):
+def get_tarloc_vol_issue(vol,issue,local):
     tar=target%(vol,issue)+"%d.full.pdf"
     loc=local%(vol,issue)+"%d.pdf"
     return (tar,loc)
@@ -72,7 +77,7 @@ def down_page(target,local,page):
     url=target%(page)
     return down_direct(url,dest)
 
-def down_searchbywebsite_findnext(text,index):
+def down_searchbywebcontent_findnext(text,index):
     temp=text.find('title="PDF"',index)
     if(temp==-1): 
         return (False,'',-1)
@@ -80,10 +85,10 @@ def down_searchbywebsite_findnext(text,index):
     right=text.find('.pdf"',left)+4
     return (True,tar_prefix+text[left:right],temp+1)
 
-def down_searchbywebsite(text,local):
+def down_searchbywebcontent(text,local):
     index=0
     while(index!=-1):
-        (flag,target,right)=down_searchbywebsite_findnext(text,index)
+        (flag,target,right)=down_searchbywebcontent_findnext(text,index)
         if(flag):
             (vol,issue)=get_vol_issue(target)
             filename=get_filename_webpath(target)
@@ -94,10 +99,14 @@ def down_searchbywebsite(text,local):
                 print("%s - canceled"%(filename))
         index=right
 
-#not conpleted        
-def down_searchbynum(target,local):
-    page=650
-    for p in range(page,500,-1):
-        down_page(target,local,p)
-    for n in range(page,800):
-        down_page(target,local,p)
+#depend on down_searchbywebcontent()
+def down_searchbyvolissue(vol,issue,local):
+    text=get_text(vol,issue)
+    down_searchbywebcontent(text,local)
+
+def get_volbyissue(issue):
+    vol=issue_1stinvol_known[1]
+    temp=issue-issue_1stinvol_known[0]
+    step=temp%issue_per_vol
+    vol+=step
+    return vol

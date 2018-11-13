@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
-import down_scimag as down
+from down_scimag import *
 
-local="E:\\BaiduYunDownload\\paper\\science\\%d\\%d\\"
+local="E:\\GitHub Repository\\paper\\science\\%d\\%d\\"
 
-(vol,issue)=down.cur_vol_issue()
+(vol,issue)=get_vol_issue_cur()
 #issue-=1
-
-text=down.get_text(vol,issue)
-down.down_searchbywebsite(text,local)
+down_searchbyvolissue(vol,issue,local)
