@@ -5,7 +5,7 @@ from __future__ import print_function
 
 import requests
 import os
-import math
+import re
 
 #global constrant
 target="http://science.sciencemag.org/content/sci/%s/%s/"
@@ -14,6 +14,7 @@ tar_prefix="http://science.sciencemag.org"
 first_year=1880
 issue_per_vol=13
 issue_1stinvol_known=(6415,362)
+RESPONSE_FAILED="failed"
 
 #function
 def get_filename_webpath(text):
@@ -35,21 +36,20 @@ def get_vol_issue_cur():
     source_url=requests.get(source_url_pre).url
     return get_vol_issue(source_url)
 
-def get_text(vol,issue):
-    source_url_pre=tar_content%(vol,issue)
-    source=requests.get(source_url_pre)
+def get_text(url):
+    source=requests.get(url)
     if(source.status_code == requests.codes.ok):
         return source.text
     else:
-        return "Failed"
+        return RESPONSE_FAILED
+    
+def get_text_volissue(vol,issue):
+    source_url=tar_content%(vol,issue)
+    return get_text(source_url)
 
 def get_text_cur():
     source_url_pre="http://science.sciencemag.org/content/current"
-    source=requests.get(source_url_pre)
-    if(source.status_code == requests.codes.ok):
-        return source.text
-    else:
-        return "Failed"
+    return get_text(source_url_pre)
 
 def get_tarloc_vol_issue(vol,issue,local):
     tar=target%(vol,issue)+"%d.full.pdf"
@@ -101,12 +101,21 @@ def down_searchbywebcontent(text,local):
 
 #depend on down_searchbywebcontent()
 def down_searchbyvolissue(vol,issue,local):
-    text=get_text(vol,issue)
+    text=get_text_volissue(vol,issue)
     down_searchbywebcontent(text,local)
 
-def get_volbyissue(issue):
-    vol=issue_1stinvol_known[1]
-    temp=issue-issue_1stinvol_known[0]
-    step=temp%issue_per_vol
-    vol+=step
+def get_volissuelist():
+    source_url="http://science.sciencemag.org/content/by/year/%d"
+    #year=2018
+    while(True):
+        url=source_url%(year)
+        text=get_text(url)
+        if(text==RESPONSE_FAILED):
+            break
+        result=re.findall(r">Vol ([0-9]*), Iss ([0-9]*)<",text)
+        #sort
+        #merge
+        #save
+        year-=1
     return vol
+
