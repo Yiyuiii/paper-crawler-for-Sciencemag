@@ -4,118 +4,183 @@
 from __future__ import print_function
 
 import requests
+import shelve
+import time
 import os
 import re
 
-#global constrant
-target="http://science.sciencemag.org/content/sci/%s/%s/"
-tar_content="http://science.sciencemag.org/content/%s/%s"
-tar_prefix="http://science.sciencemag.org"
-first_year=1880
-issue_per_vol=13
-issue_1stinvol_known=(6415,362)
-RESPONSE_FAILED="failed"
-
-#function
-def get_filename_webpath(text):
-    index=text.rindex('/')+1
-    return text[index:len(text)]
-
-def filename_cln(text):
-    return text.replace(".full.", ".")
-
-def get_vol_issue(text):
-    vol_index=text.index('content')+8
-    issue_index=vol_index+4
-    vol=text[vol_index:vol_index+3]
-    issue=text[issue_index:issue_index+4]
-    return (int(vol),int(issue))
+class websitecrawler(object):
     
-def get_vol_issue_cur():
-    source_url_pre="http://science.sciencemag.org/content/current"
-    source_url=requests.get(source_url_pre).url
-    return get_vol_issue(source_url)
-
-def get_text(url):
-    source=requests.get(url)
-    if(source.status_code == requests.codes.ok):
-        return source.text
-    else:
-        return RESPONSE_FAILED
+    tar_prefix="http://science.sciencemag.org"
+    target="http://science.sciencemag.org/content/sci/%s/%s/"
+    tar_content="http://science.sciencemag.org/content/%s/%s"
+    url_source_cur="http://science.sciencemag.org/content/current"
+    url_list="http://science.sciencemag.org/content/by/year/%d"
+    format_dict_volissue=r">Vol (.*), Iss (.*)<"
+    format_dumb_filename=(".full.", ".")
+    format_url_vol_issue="content/([^/]*)/([^/]*)"
+    year_first=1880
+    num_issue_per_vol=13
+    num_issue_1stinvol_known=(6415,362)
+    RESPONSE_FAILED="failed"
+    dir_dat='data\\'
+    filename_dat='sciencemag'
+    path_dat='data\\sciencemag' #auto created in __init__
+    dict_volissue={}
     
-def get_text_volissue(vol,issue):
-    source_url=tar_content%(vol,issue)
-    return get_text(source_url)
+    def __init__(self):
+        self.path_dat=self.dir_dat+self.filename_dat
+        self.load_data()
+        
+    def __enter__(self):
+        self.__init__()
+        return self
+        
+    def __exit__(self, type, value, trace):
+        self.save_data()
+        
+    #function
+    def save_data(self):
+        if(not os.path.exists(self.dir_dat)):
+            os.makedirs(os.path.dirname(self.dir_dat)) 
+        dbase = shelve.open(self.path_dat)
+        dbase['dict_volissue']=self.dict_volissue
+        dbase.close()
+        
+    def load_data(self):
+        if(os.path.exists(self.path_dat+'.dat')):
+            dbase = shelve.open(self.path_dat)  
+            #len(dbase)
+            self.dict_volissue=dbase['dict_volissue']
+        
+    def get_year_cur(self):
+        return int(time.strftime('%Y',time.localtime()))
+    
+    def get_filename_webpath(self,text):
+        index=text.rindex('/')+1
+        return text[index:len(text)]
+    
+    def filename_cln(self,text):
+        return text.replace(self.format_dumb_filename[0], self.format_dumb_filename[1])
+    
+    def get_vol_issue(self,url):
+        result=re.findall(self.format_url_vol_issue,url)
+        if(len(result)==0):
+            return (-1,-1)
+        (vol,issue)=result[len(result)-1]
+        return (vol,issue)
+        
+    def get_vol_issue_cur(self):
+        source_url=requests.get(self.url_source_cur).url
+        return self.get_vol_issue(source_url)
+    
+    def get_text(self,url):
+        source=requests.get(url)
+        if(source.status_code == requests.codes.ok):
+            return source.text
+        else:
+            return self.RESPONSE_FAILED
+        
+    def get_text_volissue(self,vol,issue):
+        source_url=self.tar_content%(str(vol),str(issue))
+        return self.get_text(source_url)
+    
+    def get_text_cur(self):
+        return self.get_text(self.url_source_cur)
 
-def get_text_cur():
-    source_url_pre="http://science.sciencemag.org/content/current"
-    return get_text(source_url_pre)
-
-def get_tarloc_vol_issue(vol,issue,local):
-    tar=target%(vol,issue)+"%d.full.pdf"
-    loc=local%(vol,issue)+"%d.pdf"
-    return (tar,loc)
-
-#main download module
-def down_direct(url,dest):
-    if(os.path.exists(dest)):
-        return False
-    if(not os.path.exists(os.path.dirname(dest))):
-        os.makedirs(os.path.dirname(dest)) 
-    r=requests.get(url,stream=True)
-    if(r.status_code == requests.codes.ok):
-        with open(dest,"wb") as f:
-            f.write(r.content)
-    else:
-        return False
-    return True
-
-def down_page(target,local,page):
-    dest=local%(page)
-    if(os.path.exists(dest)):
+    #outdated
+    def get_tarloc_for_page(self,vol,issue,local):
+        tar_page=self.target%(str(vol),str(issue))+"%d.full.pdf"
+        loc_page=local%(str(vol),str(issue))+"%d.pdf"
+        return (tar_page,loc_page)
+    
+    #main download module
+    def down_direct(self,url,dest):
+        if(os.path.exists(dest)):
+            return False
+        if(not os.path.exists(os.path.dirname(dest))):
+            os.makedirs(os.path.dirname(dest)) 
+        r=requests.get(url,stream=True)
+        if(r.status_code == requests.codes.ok):
+            retry=True
+            while(retry):
+                try:
+                    with open(dest,"wb") as f:
+                        f.write(r.content)
+                except requests.exceptions.ChunkedEncodingError as e:
+                    print(str(e))
+                else:
+                    retry=False
+        else:
+            return False
         return True
-    url=target%(page)
-    return down_direct(url,dest)
-
-def down_searchbywebcontent_findnext(text,index):
-    temp=text.find('title="PDF"',index)
-    if(temp==-1): 
-        return (False,'',-1)
-    left=text.rfind('<a href="',0,temp)+9
-    right=text.find('.pdf"',left)+4
-    return (True,tar_prefix+text[left:right],temp+1)
-
-def down_searchbywebcontent(text,local):
-    index=0
-    while(index!=-1):
-        (flag,target,right)=down_searchbywebcontent_findnext(text,index)
-        if(flag):
-            (vol,issue)=get_vol_issue(target)
-            filename=get_filename_webpath(target)
-            filename=filename_cln(filename)
-            if(down_direct(target,local%(vol,issue)+filename)):
-                print("%s - finished"%(filename))
+    
+    def down_page(self,tar_page,loc_page,page):
+        dest=loc_page%(page)
+        if(os.path.exists(dest)):
+            return True
+        url=tar_page%(page)
+        return self.down_direct(url,dest)
+    
+    def down_searchbywebcontent_findnext(self,text,index):
+        temp=text.find('title="PDF"',index)
+        if(temp==-1): 
+            return (False,'',-1)
+        left=text.rfind('<a href="',0,temp)+9
+        right=text.find('.pdf"',left)+4
+        return (True,self.tar_prefix+text[left:right],temp+1)
+    
+    def down_searchbywebcontent(self,text,local):
+        index=0
+        while(index!=-1):
+            (flag,target,right)=self.down_searchbywebcontent_findnext(text,index)
+            if(flag):
+                (vol,issue)=self.get_vol_issue(target)
+                filename=self.get_filename_webpath(target)
+                filename=self.filename_cln(filename)
+                if(self.down_direct(target,local%(str(vol),str(issue))+filename)):
+                    print("%s - finished"%(filename))
+                else:
+                    print("%s - canceled"%(filename))
+            index=right
+    
+    #Depend on down_searchbywebcontent()
+    def down_searchbyvolissue(self,vol,issue,local):
+        text=self.get_text_volissue(vol,issue)
+        self.down_searchbywebcontent(text,local)
+    
+    #recommended
+    def down_issues(self,issues,local):
+        for issue in issues:
+            issue=int(issue)
+            if(issue in self.dict_volissue):
+                vol=self.dict_volissue[issue]
             else:
-                print("%s - canceled"%(filename))
-        index=right
+                print('Cannot find Issue %d in I-V dictionary.'%(issue))
+                continue
+            print('Downloading Issue %d.'%(issue))
+            self.down_searchbyvolissue(vol,issue,local)
+        
+    #This takes a while
+    def get_volissuelist(self):
+        year=self.get_year_cur()
+        print('Started searching vol-issue dictionary on website.','This takes a while.')
+        while(True):
+            #print('Current:%d'%year,end='\r')
+            print('Current:%d'%year)
+            url=self.url_list%(year)
+            text=self.get_text(url)
+            if(text==self.RESPONSE_FAILED):
+                print(text)
+            else:
+                result=re.findall(self.format_dict_volissue,text)
+                for (vol,issue) in result:
+                    self.dict_volissue[int(issue)]=int(vol)
+            #TODO:optimize
+            if(year==self.year_first):
+                break
+            year-=1
+        return self.dict_volissue
 
-#depend on down_searchbywebcontent()
-def down_searchbyvolissue(vol,issue,local):
-    text=get_text_volissue(vol,issue)
-    down_searchbywebcontent(text,local)
-
-def get_volissuelist():
-    source_url="http://science.sciencemag.org/content/by/year/%d"
-    #year=2018
-    while(True):
-        url=source_url%(year)
-        text=get_text(url)
-        if(text==RESPONSE_FAILED):
-            break
-        result=re.findall(r">Vol ([0-9]*), Iss ([0-9]*)<",text)
-        #sort
-        #merge
-        #save
-        year-=1
-    return vol
-
+    def update_volissuelist(self):
+        m=max(self.dict_volissue)

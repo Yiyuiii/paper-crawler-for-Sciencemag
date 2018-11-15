@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
-from down_scimag import *
+from down_scimag import websitecrawler
+local="E:\\GitHub Repository\\paper\\science\\%s\\%s\\"
 
-local="E:\\GitHub Repository\\paper\\science\\%d\\%d\\"
+with websitecrawler() as wcr:
+    wcr.down_issues(range(6411,6414),local)
+#    (vol,issue)=wcr.get_vol_issue_cur()
+#    wcr.down_searchbyvolissue(vol,issue,local)
 
-(vol,issue)=get_vol_issue_cur()
-#issue-=1
-down_searchbyvolissue(vol,issue,local)
+#with websitecrawler() as wcr:
+#    print(wcr.get_volissuelist())
