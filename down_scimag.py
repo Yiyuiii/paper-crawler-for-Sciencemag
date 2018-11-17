@@ -95,25 +95,32 @@ class websitecrawler(object):
         return (tar_page,loc_page)
     
     #main download module
+    #returns string
     def down_direct(self,url,dest):
         if(os.path.exists(dest)):
-            return False
+            return 'already exist'
         if(not os.path.exists(os.path.dirname(dest))):
             os.makedirs(os.path.dirname(dest)) 
-        r=requests.get(url,stream=True)
+        r=requests.get(url,stream=True, timeout=(10,20))
+#        timer = Timer(interval, time_out)
         if(r.status_code == requests.codes.ok):
-            retry=True
-            while(retry):
-                try:
-                    with open(dest,"wb") as f:
-                        f.write(r.content)
-                except requests.exceptions.ChunkedEncodingError as e:
-                    print(str(e))
-                else:
-                    retry=False
+            try:
+#                timer.start()
+#                res = func(*args, **kwargs)
+#                timer.cancel()
+                with open(dest,"wb") as f:
+                    f.write(r.content)
+            except (requests.exceptions.ReadTimeout,
+                    requests.exceptions.ConnectionError,
+                    requests.exceptions.ChunkedEncodingError
+                    ) as e:
+                os.remove(dest)
+                return str(e)
+            else:
+                pass
         else:
-            return False
-        return True
+            return str(r.status_code)
+        return 'finished'
     
     def down_page(self,tar_page,loc_page,page):
         dest=loc_page%(page)
@@ -138,10 +145,9 @@ class websitecrawler(object):
                 (vol,issue)=self.get_vol_issue(target)
                 filename=self.get_filename_webpath(target)
                 filename=self.filename_cln(filename)
-                if(self.down_direct(target,local%(str(vol),str(issue))+filename)):
-                    print("%s - finished"%(filename))
-                else:
-                    print("%s - canceled"%(filename))
+                print("%s - "%(filename),end='')
+                dest=local%(str(vol),str(issue))+filename
+                print(self.down_direct(target,dest))
             index=right
     
     #Depend on down_searchbywebcontent()
