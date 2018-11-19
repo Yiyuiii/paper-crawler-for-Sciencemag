@@ -101,25 +101,26 @@ class websitecrawler(object):
             return 'already exist'
         if(not os.path.exists(os.path.dirname(dest))):
             os.makedirs(os.path.dirname(dest)) 
-        r=requests.get(url,stream=True, timeout=(10,20))
-#        timer = Timer(interval, time_out)
-        if(r.status_code == requests.codes.ok):
-            try:
+        try:
+            r=requests.get(url,stream=True, timeout=(10,20))
+    #        timer = Timer(interval, time_out)
+            if(r.status_code == requests.codes.ok):
 #                timer.start()
 #                res = func(*args, **kwargs)
 #                timer.cancel()
                 with open(dest,"wb") as f:
                     f.write(r.content)
-            except (requests.exceptions.ReadTimeout,
-                    requests.exceptions.ConnectionError,
-                    requests.exceptions.ChunkedEncodingError
-                    ) as e:
-                os.remove(dest)
-                return str(e)
             else:
-                pass
+                return str(r.status_code)
+        except (requests.exceptions.ReadTimeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ChunkedEncodingError
+                ) as e:
+            if(os.path.exists(dest)):
+                os.remove(dest)
+            return str(e)
         else:
-            return str(r.status_code)
+            pass
         return 'finished'
     
     def down_page(self,tar_page,loc_page,page):
